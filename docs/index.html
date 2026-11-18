@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dropzone</title>
+<meta name="theme-color" content="#0f1115">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#14161a;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--fg:#e8eaee;--mut:#8b93a1;--line:#272b33;--acc:#5b8cff}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.card{width:100%;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 24px;text-align:center}
+h1{font-size:24px;margin:0 0 8px;letter-spacing:-.02em}h1 span{color:var(--acc)}
+p{margin:0;color:var(--mut)}
+.spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--acc);border-radius:50%;margin:18px auto 0;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+button{margin-top:16px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:10px;padding:8px 14px;font:inherit;cursor:pointer}
+</style></head><body>
+<div class="card"><h1>Drop<span>zone</span></h1><p id="msg">Connecting…</p><div class="spin" id="spin"></div><button id="retry" hidden>Try again</button></div>
+<script>
+// Finds the owner's current Dropzone address (stored in their public gist "dropzone-link") and forwards there.
+const user=location.hostname.split('.')[0];
+const msg=t=>document.getElementById('msg').textContent=t;
+let timer;
+async function go(){
+  clearTimeout(timer);document.getElementById('spin').hidden=false;document.getElementById('retry').hidden=true;msg('Connecting…');
+  try{
+    const gists=await (await fetch(`https://api.github.com/users/${user}/gists?per_page=100`,{cache:'no-store'})).json();
+    const g=Array.isArray(gists)&&gists.find(x=>x.description==='dropzone-link');
+    if(!g)return offline('Dropzone link is not set up yet.');
+    const f=g.files['dropzone-link.txt'];
+    const url=(await (await fetch(f.raw_url,{cache:'no-store'})).text()).trim();
+    if(!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(url))return offline('Dropzone is offline right now (the PC is off or not sharing).');
+    const ctl=new AbortController();setTimeout(()=>ctl.abort(),8000);
+    const r=await fetch(url+'/api/ping',{cache:'no-store',signal:ctl.signal});
+    if(!r.ok||!(await r.json()).dropzone)throw 0;
+    location.replace(url+'/');
+  }catch(e){offline('Dropzone is offline right now (the PC is off or restarting).')}
+}
+function offline(t){msg(t+' Retrying automatically…');document.getElementById('spin').hidden=true;document.getElementById('retry').hidden=false;timer=setTimeout(go,15000)}
+document.getElementById('retry').onclick=go;
+go();
+</script></body></html>

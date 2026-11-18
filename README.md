@@ -1,14 +1,17 @@
 # Dropzone
 
-**A tiny, clean, local way to move links, text and files between your Android phone and your PC — no apps, no accounts, no cloud.**
+**A tiny, clean, self-hosted way to move links, text, files and whole folders between your phone, your PC and your friends — from anywhere, with nothing to install on their side.**
 
-Built as a replacement for the "send it to myself on WhatsApp / Google Chat, then open it on desktop" workflow. Dropzone runs a small web server on your PC; your phone opens it in the browser over the same Wi-Fi or mobile hotspot, and anything you send shows up on the other side within ~2 seconds.
+Built as a replacement for the "send it to myself on WhatsApp / Google Chat, then open it on desktop" workflow. Dropzone runs on your PC; anyone with the link + PIN opens it in a browser (same Wi-Fi or across the country) and everything sent shows up for everyone within ~2 seconds.
 
 - ✅ Single Python file, **standard library only** — nothing to `pip install`
-- ✅ Works **both ways**: phone → PC and PC → phone
-- ✅ Links, text, photos, videos, PDFs, any file type, any size
-- ✅ Everything stays on your own machine
-- ✅ Clean UI with automatic light / dark mode
+- ✅ **Links, text, files, photos, videos and whole folders** — no compression, original quality
+- ✅ **Download any folder — or any selection of items — as one ZIP**
+- ✅ **PIN login** so only people you trust get in
+- ✅ **Works over the internet** via a free Cloudflare tunnel (HTTPS), **nothing for friends to install**
+- ✅ **Permanent link** (GitHub Pages) that always points to your Dropzone
+- ✅ **Resumable chunked uploads** — big files survive flaky mobile data
+- ✅ Everything is stored on **your own PC**
 - ✅ Starts with one command: `dropzone`
 
 ---
@@ -18,43 +21,50 @@ Built as a replacement for the "send it to myself on WhatsApp / Google Chat, the
 1. [How it works](#how-it-works)
 2. [Requirements](#requirements)
 3. [Installation](#installation)
-4. [One-time Windows + WSL setup](#one-time-windows--wsl-setup)
-5. [Daily usage](#daily-usage)
-6. [Features in detail](#features-in-detail)
-7. [Command-line options](#command-line-options)
-8. [Where data is stored](#where-data-is-stored)
-9. [HTTP API](#http-api)
-10. [Troubleshooting](#troubleshooting)
-11. [Security notes](#security-notes)
-12. [Uninstall](#uninstall)
-13. [Project layout](#project-layout)
+4. [Quick start (3 commands)](#quick-start-3-commands)
+5. [Sharing with friends anywhere](#sharing-with-friends-anywhere)
+6. [Permanent link](#permanent-link)
+7. [Daily usage](#daily-usage)
+8. [Features in detail](#features-in-detail)
+9. [Command-line reference](#command-line-reference)
+10. [Same Wi-Fi only (optional Windows + WSL setup)](#same-wi-fi-only-optional-windows--wsl-setup)
+11. [Where data is stored](#where-data-is-stored)
+12. [HTTP API](#http-api)
+13. [Troubleshooting](#troubleshooting)
+14. [Security](#security)
+15. [Limitations](#limitations)
+16. [Uninstall](#uninstall)
+17. [Project layout](#project-layout)
 
 ---
 
 ## How it works
 
 ```
- ┌──────────────┐        same Wi-Fi / hotspot        ┌──────────────────────┐
- │  Android     │  ───────── http://PC-IP:8765 ────▶ │  PC (Windows + WSL)  │
- │  browser     │  ◀──────── polls every 2s ──────── │  dropzone.py server  │
- └──────────────┘                                    │  data/ (your files)  │
-                                                     └──────────────────────┘
-                                                               ▲
-                                              http://localhost:8765 (PC browser)
+  Friend (Ranchi)                                   Your PC (Dhanbad)
+  ┌────────────┐   https://you.github.io/dropzone   ┌───────────────────────┐
+  │  browser   │ ──▶ (permanent link, GitHub Pages) │  dropzone.py          │
+  └────────────┘          │ forwards to            │   ├─ web UI + API     │
+                          ▼                         │   ├─ data/ (files)   │
+              https://xyz.trycloudflare.com ◀──────▶│   └─ cloudflared ─────┼──▶ Cloudflare
+                  (Cloudflare tunnel, HTTPS)        └───────────────────────┘
+  Your phone ─── same link, or http://PC-IP:8765 on the same Wi-Fi
 ```
 
-Both the phone and the PC open the **same page**. Whatever either side sends is stored on the PC and appears in the shared list on both screens. Each item is tagged 📱 phone or 💻 pc so you know where it came from.
+- Your PC runs `dropzone.py` (web server + UI) and `cloudflared`, which opens an **outgoing** encrypted tunnel to Cloudflare. No router/port-forwarding setup is needed and it works even behind mobile hotspots and WSL's NAT.
+- Cloudflare gives a random `https://….trycloudflare.com` address. Because it changes each restart, Dropzone writes the current address into a public GitHub gist, and a tiny page on **GitHub Pages** reads it and forwards visitors there — that's your **permanent link**.
+- Everyone sees the same shared list. Each item is tagged with the sender's name and device (📱 / 💻).
 
 ---
 
 ## Requirements
 
-- **Python 3.8+** (tested on 3.14) — already included in Kali / most Linux distros
-- A PC and an Android phone on the **same network** (home Wi-Fi, or the PC connected to the phone's hotspot)
-- On Windows + WSL2: the [one-time setup](#one-time-windows--wsl-setup) below
-- Optional: internet access on the PC page to draw the QR code (the URL is always shown as text too)
+- **Python 3.8+** (Kali / Ubuntu / most Linux distros already have it)
+- Internet on the PC (for sharing with friends) — or just the same Wi-Fi for local use
+- For the permanent link: a GitHub account + the [GitHub CLI](https://cli.github.com) (`gh auth login`)
+- `cloudflared` is **downloaded automatically** the first time (≈40 MB, from Cloudflare's official GitHub releases) into `dropzone/bin/`
 
-Works on iPhone browsers too; it's just been tested mainly on Android.
+Friends need **only a browser**.
 
 ---
 
@@ -67,70 +77,19 @@ chmod +x ~/dropzone/start.sh ~/dropzone/dropzone.py
 # make the `dropzone` command available everywhere
 mkdir -p ~/.local/bin
 ln -sf ~/dropzone/start.sh ~/.local/bin/dropzone
+which dropzone          # should print ~/.local/bin/dropzone
 ```
 
-Make sure `~/.local/bin` is on your `PATH` (it is by default on Kali / Ubuntu). Check with:
-
-```bash
-which dropzone
-```
-
-> On plain Linux (not WSL) you're done — skip to [Daily usage](#daily-usage). You may still need to allow port 8765 in your firewall (e.g. `sudo ufw allow 8765/tcp`).
+`~/.local/bin` is on `PATH` by default on Kali / Ubuntu. If not, add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` / `~/.zshrc`.
 
 ---
 
-## One-time Windows + WSL setup
-
-**Why this is needed:** by default WSL2 runs in *NAT* mode — Linux gets a private internal IP (like `192.168.192.x`) that your phone can't reach, so the phone shows *"This site can't be reached"*. The fix is to switch WSL to **mirrored** networking (Linux shares the PC's real Wi-Fi IP) and open port 8765 in the firewall.
-
-### Automatic (recommended)
-
-1. Open **File Explorer** and go to:
-   ```
-   \\wsl.localhost\kali-linux\home\<your-linux-user>\dropzone
-   ```
-   (replace `kali-linux` with your distro name — see `wsl -l`)
-2. Double-click **`Setup-Dropzone.bat`** and click **Yes** on the admin prompt.
-3. The script will:
-   - add `networkingMode=mirrored` to `C:\Users\<you>\.wslconfig` (backing up any existing file to `.wslconfig.bak`)
-   - add a Windows Firewall inbound rule for TCP 8765
-   - add a WSL Hyper-V firewall rule for TCP 8765 (Windows 11 22H2+)
-   - run `wsl --shutdown` so the change takes effect
-4. Re-open your Linux terminal.
-
-### Manual
-
-`C:\Users\<you>\.wslconfig`:
-
-```ini
-[wsl2]
-networkingMode=mirrored
-```
-
-PowerShell **as Administrator**:
-
-```powershell
-New-NetFirewallRule -DisplayName "Dropzone" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow
-New-NetFirewallHyperVRule -Name Dropzone -DisplayName "Dropzone" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8765
-wsl --shutdown
-```
-
-Verify inside Linux:
+## Quick start (3 commands)
 
 ```bash
-wslinfo --networking-mode   # should print: mirrored
-```
-
-> Mirrored mode needs Windows 11 22H2 or newer. If `dropzone` still says *"WSL is in NAT mode"*, the setup hasn't applied yet — run `wsl --shutdown` from Windows and reopen the terminal.
-
----
-
-## Daily usage
-
-### Start
-
-```bash
-dropzone
+dropzone --set-pin      # 1. choose a PIN (6+ digits)          — once
+dropzone --setup-link   # 2. create your permanent link         — once
+dropzone                # 3. start (every time)
 ```
 
 Output:
@@ -138,69 +97,153 @@ Output:
 ```
   Dropzone is running
 
-  PC:    http://localhost:8765
-  Phone: http://10.202.202.191:8765
+  PC:       http://localhost:8765
+  Wi-Fi:    (unavailable - WSL is in NAT mode; use the internet link)
+  Internet: starting secure tunnel...
 
-  Click 'Connect phone' on the PC page for a QR code. Ctrl+C to stop.
+  Click 'Links' on the page for QR codes. Ctrl+C to stop.
+
+  Internet: https://brave-otter-example.trycloudflare.com
+  Permanent link: https://22f2000145.github.io/dropzone/  (give this to friends)
 ```
 
-The PC page opens in your Windows browser automatically. Stop with **Ctrl+C**.
+Send the **permanent link** and the **PIN** to your friend once. They bookmark it — done.
 
-### Connect the phone (first time)
+---
 
-1. On the PC page click **Connect phone** → a QR code appears.
-2. Scan it with the phone camera / Google Lens.
-3. In Chrome on the phone: **⋮ → Add to Home screen**. Now Dropzone opens like an app.
+## Sharing with friends anywhere
 
-> The phone's IP address can change when you reconnect to the hotspot. If the bookmark stops working, just scan the QR again.
+1. **Set a PIN** — internet sharing is **disabled until a PIN exists**:
+   ```bash
+   dropzone --set-pin
+   ```
+   Changing the PIN logs everyone out.
+2. **Start** with `dropzone`. When a PIN is set, the internet tunnel starts automatically. Use `dropzone --local` to skip it.
+3. Your friend opens the link, enters the PIN and (optionally) their name. Their browser stays logged in for a year.
+4. They can send you files/folders/links and download what you share — no app, no account.
 
-### Send from phone → PC
+> The tunnel reconnects by itself if the connection drops. If it gets a new address, the permanent link is updated automatically.
 
-- **Link / text:** paste in the box → **Send**
-- **Files / photos:** tap **Tap to choose files / photos** (multiple allowed)
+---
 
-### Send from PC → phone
+## Permanent link
 
-- **Drag & drop** files anywhere on the page
-- **Ctrl+V** anywhere: pastes a screenshot / copied file as an upload, or copied text/link as a message
-- Type text and press **Ctrl+Enter**
+```bash
+dropzone --setup-link
+```
 
-### On each item
+This one-time command (uses your logged-in `gh`):
+
+1. Creates a public gist named `dropzone-link` that stores your current tunnel address (or `offline`).
+2. Enables **GitHub Pages** for this repo from the `docs/` folder.
+3. Saves the link: `https://<your-github-username>.github.io/<repo>/`
+
+From then on, every time `dropzone` starts it updates the gist; when you stop it (Ctrl+C) it writes `offline`.
+
+When someone opens the permanent link:
+
+- **Dropzone running** → they're forwarded to it in a second or two.
+- **PC off / stopped** → a clean "Dropzone is offline" screen that **retries automatically every 15 s**, so they can leave it open.
+
+> GitHub Pages needs a minute or two for its first deploy. After a restart, the gist API can cache for up to ~60 s, so the link may say "offline" briefly before forwarding.
+
+---
+
+## Daily usage
+
+### Start / stop
+
+```bash
+dropzone          # start (browser opens on the PC)
+# Ctrl+C          # stop
+```
+
+### Connect your phone
+
+On the PC page click **Links** → scan the QR code (it points to the permanent link if set up). In Chrome: **⋮ → Add to Home screen** to use it like an app.
+
+### Sending
+
+| From | How |
+|------|-----|
+| Phone / friend | Paste a link or text → **Send** · **📄 Files** · **📁 Folder** |
+| PC | Drag & drop **files or folders** anywhere · **Ctrl+V** to paste screenshots/files/links · type + **Ctrl+Enter** |
+
+Uploads show a progress bar; folders show `12/40 files · 120 MB / 400 MB`.
+
+### Receiving
 
 | Item | Buttons |
 |------|---------|
-| Link / text | **Open** (links only) · **Copy** · **✕** delete |
-| File | **View** (open in browser) · **Save** (download) · **✕** delete |
+| Link / text | **Open** (links) · **Copy** · **✕** |
+| File | **View** · **Save** · **✕** |
+| Folder | **Files** (expand & download single files) · **ZIP** (whole folder) · **✕** |
 
-**Clear all** in the header wipes the whole history (files included).
+### Selecting several items
+
+Tap **Select** → tick items (or tap the cards) → bottom bar:
+**All** · **Download ZIP** (everything selected in one zip — folders keep their structure, texts go into `notes.txt`) · **Delete** · **Cancel**.
 
 ---
 
 ## Features in detail
 
-- **Live sync** — each page polls every 2 s; a toast shows *"New from phone"* and the tab title gets a `•` when something arrives from the other device.
-- **Image thumbnails** for photos, file-type badge for everything else.
-- **Upload progress bar** per file; large files are streamed to disk in 1 MB chunks (no size limit beyond disk space).
-- **Clickable links** inside text messages.
-- **Copy works over plain HTTP** (falls back from the Clipboard API, which browsers restrict to HTTPS).
-- **Persistent history** — survives restarts until you delete items.
-- **Device tag** — 📱 phone / 💻 pc detected from the browser user-agent.
-- **Light / dark theme** follows your system setting.
+- **Folder upload** — PC: drag a folder in or use **📁 Folder**. Phone: **📁 Folder** in Chrome (folder picking on Android depends on your Chrome version; if it isn't offered, select all files inside the folder with **📄 Files**).
+- **Folder structure preserved** — subfolders are kept, both on disk and in ZIPs.
+- **Streaming ZIP** — ZIPs are built on the fly (no temp copy, no waiting); no compression for speed since photos/videos are already compressed; ZIP64 for >4 GB.
+- **Chunked, resumable uploads** — files go up in 16 MB chunks with automatic retries; a dropped connection resumes where it stopped. This also bypasses Cloudflare's 100 MB request limit, so there is **no file size limit** beyond your disk.
+- **3 parallel uploads** inside a folder for speed.
+- **PIN login** with a remembered session (1 year, HttpOnly cookie). Optional name shown on everything you send.
+- **Live sync** every 2 s (cheap — only sends data when something changed). Toast + `•` in the tab title when something new arrives.
+- **Image thumbnails**, file-type badges, clickable links.
+- **Copy** works on HTTPS and plain HTTP.
+- **Light / dark theme** follows the system.
 
 ---
 
-## Command-line options
+## Command-line reference
 
 ```
-dropzone [--port PORT] [--no-browser]
+dropzone [--port PORT] [--no-browser] [--local]
+dropzone --set-pin | --remove-pin | --setup-link
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--port` | `8765` | Port to listen on. If you change it, also open that port in the firewall. |
-| `--no-browser` | off | Don't auto-open the PC browser. |
+| Option | Description |
+|--------|-------------|
+| *(none)* | Start. Opens the internet tunnel if a PIN is set. |
+| `--set-pin` | Set / change the PIN (≥ 6 digits). Logs everyone out. |
+| `--remove-pin` | Remove the PIN. Internet sharing turns off. |
+| `--setup-link` | One-time: create the permanent GitHub Pages link. |
+| `--local` | Don't open the internet tunnel this time. |
+| `--no-browser` | Don't open the PC browser. |
+| `--port N` | Use a different port (default `8765`). |
 
-`start.sh` passes all arguments through, so `dropzone --port 9000` works.
+---
+
+## Same Wi-Fi only (optional Windows + WSL setup)
+
+**You don't need this if you use the internet link** — the tunnel works even with WSL's default NAT networking.
+
+It's only for direct `http://PC-IP:8765` access on the same Wi-Fi (slightly faster, works without internet). WSL2 NAT hides Linux from your network, so switch WSL to **mirrored** networking and open the port:
+
+**Automatic:** in File Explorer open `\\wsl.localhost\kali-linux\home\<user>\dropzone`, double-click **`Setup-Dropzone.bat`**, click **Yes**. It edits `C:\Users\<you>\.wslconfig` (backs up the old one to `.wslconfig.bak`), adds firewall rules for TCP 8765, and restarts WSL.
+
+**Manual:** `C:\Users\<you>\.wslconfig`
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+PowerShell as Administrator:
+
+```powershell
+New-NetFirewallRule -DisplayName "Dropzone" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow
+New-NetFirewallHyperVRule -Name Dropzone -DisplayName "Dropzone" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8765
+wsl --shutdown
+```
+
+Check with `wslinfo --networking-mode` → `mirrored`. On plain Linux just allow the port (`sudo ufw allow 8765/tcp`).
 
 ---
 
@@ -208,37 +251,43 @@ dropzone [--port PORT] [--no-browser]
 
 ```
 ~/dropzone/data/
-├── items.json      # list of items (text, file metadata, sender, timestamp)
-└── files/          # uploaded files, stored by item id
+├── items.json      # list of items
+├── config.json     # PIN hash, login sessions, gist id, permanent link (chmod 600)
+├── files/          # files (by id) and folders (by id/subpath)
+└── parts/          # in-progress uploads (auto-cleaned after 24 h)
+~/dropzone/bin/cloudflared   # auto-downloaded tunnel binary
 ```
 
-Delete the `data/` folder to reset everything. It's excluded from git via `.gitignore`.
+`data/` and `bin/` are git-ignored. Delete `data/files` + `data/items.json` to wipe history.
 
 ---
 
 ## HTTP API
 
-Handy for scripts (e.g. send a file from the terminal):
+All endpoints except `/`, `/api/ping`, `/api/me` and `/api/login` require the login cookie when a PIN is set.
 
-| Method | Path | Body / headers | Description |
-|--------|------|----------------|-------------|
-| `GET` | `/` | — | Web UI |
-| `GET` | `/api/items` | — | `{version, items[]}` newest first |
-| `GET` | `/api/info` | — | `{ips[], port}` |
-| `POST` | `/api/text` | JSON `{"text": "..."}` | Add a text / link item |
-| `POST` | `/api/upload` | raw file bytes, header `X-Filename` (URL-encoded) | Upload a file |
-| `GET` | `/files/<id>` | — | View file inline (`?dl` to force download) |
-| `DELETE` | `/api/items/<id>` | — | Delete one item |
-| `DELETE` | `/api/items` | — | Delete everything |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/ping` | Health check `{dropzone:true}` (CORS-enabled, used by the permanent link) |
+| `GET` | `/api/me` | `{authed, pin}` |
+| `POST` | `/api/login` | `{"pin": "..."}` → sets `dz` cookie |
+| `POST` | `/api/logout` | Clears the session |
+| `GET` | `/api/items?v=<version>` | Items, newest first; `{same:true}` if unchanged |
+| `GET` | `/api/info` | `{ips, port, public, stable}` |
+| `POST` | `/api/text` | `{"text": "..."}` |
+| `POST` | `/api/chunk` | Upload a chunk. Headers: `X-Upload-Id` (hex), `X-Offset`, `X-Total`, `X-Filename` (URL-encoded); for folders also `X-Folder`, `X-Relpath`. Returns `409 {have}` if the offset is wrong (resume from `have`). |
+| `POST` | `/api/folder` | `{"name","count"}` → new folder item |
+| `POST` | `/api/folder/<id>/done` | Mark folder upload finished |
+| `GET` | `/files/<id>` · `/files/<folderId>/<path>` | View (`?dl` = download) |
+| `GET` | `/zip?ids=a,b,c` | Stream a ZIP of the items |
+| `DELETE` | `/api/items/<id>[,<id>…]` · `/api/items` | Delete some / all |
 
-Examples:
+Send a file from the terminal (no PIN, or add `-b cookie`):
 
 ```bash
-# send a link to the phone
-curl -X POST localhost:8765/api/text -H 'Content-Type: application/json' -d '{"text":"https://example.com"}'
-
-# send a file
-curl -X POST localhost:8765/api/upload -H 'X-Filename: report.pdf' --data-binary @report.pdf
+f=report.pdf; curl -X POST localhost:8765/api/chunk \
+  -H "X-Upload-Id: $(openssl rand -hex 8)" -H "X-Offset: 0" -H "X-Total: $(stat -c%s "$f")" \
+  -H "X-Filename: $f" --data-binary @"$f"
 ```
 
 ---
@@ -247,23 +296,38 @@ curl -X POST localhost:8765/api/upload -H 'X-Filename: report.pdf' --data-binary
 
 | Problem | Fix |
 |---------|-----|
-| Phone: *"This site can't be reached"* | Run the [one-time setup](#one-time-windows--wsl-setup). Make sure phone and PC are on the same network. Use the **Phone** URL / QR, never `localhost`. |
-| `dropzone` prints *"WSL is in NAT mode"* | Setup not applied — run `Setup-Dropzone.bat`, or `wsl --shutdown` and reopen the terminal. |
-| Worked yesterday, not today | Hotspot gave the PC a new IP. Restart `dropzone` and re-scan the QR. |
-| `dropzone: command not found` | Re-create the link: `ln -sf ~/dropzone/start.sh ~/.local/bin/dropzone` and ensure `~/.local/bin` is in `PATH`. |
-| `Address already in use` | Dropzone is already running in another terminal, or use `dropzone --port 8766` (and open that port). |
-| QR code doesn't show | The QR library loads from a CDN — needs internet. Type the URL shown under it instead. |
-| Copy button does nothing | Long-press the text and copy manually; some browsers block clipboard access on HTTP. |
-| Page opens on PC but not automatically | Open `http://localhost:8765` yourself, or start with `--no-browser` and bookmark it. |
+| No "Internet:" line | You haven't set a PIN (`dropzone --set-pin`), or you used `--local`. |
+| "Could not get cloudflared" | No internet, or GitHub blocked. Install it manually (`sudo apt install cloudflared` or download from Cloudflare) — Dropzone uses it from `PATH`. |
+| Permanent link says offline | Dropzone isn't running, or it just started (wait ~1 min — it retries itself). |
+| Permanent link 404 | GitHub Pages not deployed yet (wait 2 min) or not enabled — repo **Settings → Pages → main / docs**. |
+| Phone: "This site can't be reached" on `http://192.168…` | That's the same-Wi-Fi link; use the internet/permanent link, or do the [Wi-Fi setup](#same-wi-fi-only-optional-windows--wsl-setup). |
+| "Too many wrong attempts" | 10 wrong PINs in 10 min locks login for everyone for a few minutes (brute-force protection). |
+| Folder button opens a file picker on Android | Your Chrome doesn't support folder picking; select all the files inside instead. |
+| `Port 8765 is busy` | Dropzone is already running in another terminal. |
+| `dropzone: command not found` | `ln -sf ~/dropzone/start.sh ~/.local/bin/dropzone` and make sure `~/.local/bin` is in `PATH`. |
+| QR code missing | The QR library loads from a CDN; use the copy buttons instead. |
 
 ---
 
-## Security notes
+## Security
 
-- There is **no password**. Anyone on the same network who knows the URL can see and add items.
-- That's fine on your own hotspot / home Wi-Fi. **Don't run it on public or office Wi-Fi.**
-- Traffic is plain HTTP (unencrypted) on the local network.
-- Stop the server (Ctrl+C) when you're not using it.
+- Internet sharing **requires a PIN** (≥ 6 digits, stored as a salted PBKDF2 hash).
+- **Brute-force protection:** 10 wrong attempts in 10 minutes → login locked for everyone; each wrong attempt also waits 1 s.
+- Sessions are random 256-bit tokens in an HttpOnly, SameSite=Lax cookie (Secure over HTTPS). `--set-pin` revokes all sessions.
+- Internet traffic is **HTTPS** end-to-browser via Cloudflare. (Cloudflare can technically see traffic passing through its edge, like any CDN/proxy.)
+- Uploaded file paths are sanitised (no `../` escapes); files are served only from Dropzone's own storage.
+- Everyone with the PIN sees and can delete **all** items — share the PIN only with people you trust.
+- The tunnel address in your public gist isn't secret — the PIN is what protects you.
+- Stop Dropzone (Ctrl+C) when you don't need it.
+
+---
+
+## Limitations
+
+- **Your PC is the server.** If it's off, asleep or Dropzone isn't running, nobody can send or receive. (For 24/7 you'd run it on an always-on machine, e.g. a free cloud VM or an old laptop.)
+- Not a messenger — no chat threads, calls or push notifications when the page is closed.
+- One shared space: no per-friend private rooms.
+- Cloudflare "quick tunnels" are a free service with no uptime guarantee.
 
 ---
 
@@ -272,16 +336,17 @@ curl -X POST localhost:8765/api/upload -H 'X-Filename: report.pdf' --data-binary
 ```bash
 rm ~/.local/bin/dropzone
 rm -rf ~/dropzone
+gh gist delete <gist-id>           # id is in data/config.json before deleting
 ```
 
-Optional, on Windows (PowerShell as Admin):
+Disable GitHub Pages in the repo settings. If you did the Wi-Fi setup, in admin PowerShell:
 
 ```powershell
 Remove-NetFirewallRule -DisplayName "Dropzone"
 Remove-NetFirewallHyperVRule -Name "Dropzone"
 ```
 
-and remove `networkingMode=mirrored` from `C:\Users\<you>\.wslconfig` (or restore `.wslconfig.bak`) if you don't want mirrored networking for anything else.
+and remove `networkingMode=mirrored` from `C:\Users\<you>\.wslconfig`.
 
 ---
 
@@ -289,10 +354,11 @@ and remove `networkingMode=mirrored` from `C:\Users\<you>\.wslconfig` (or restor
 
 ```
 dropzone/
-├── dropzone.py          # the whole app: HTTP server + embedded web UI
+├── dropzone.py          # the whole app: server, tunnel manager, embedded web UI
+├── docs/index.html      # permanent-link forwarder (served by GitHub Pages)
 ├── start.sh             # launcher (symlinked to ~/.local/bin/dropzone)
 ├── Dropzone.bat         # double-click launcher from Windows
-├── Setup-Dropzone.bat   # one-time Windows setup (asks for admin)
+├── Setup-Dropzone.bat   # optional same-Wi-Fi setup (asks for admin)
 ├── setup-windows.ps1    # what Setup-Dropzone.bat runs
 └── README.md
 ```
