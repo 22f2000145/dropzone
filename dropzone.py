@@ -557,6 +557,17 @@ def setup_link():
         print("     Enable it manually: repo Settings -> Pages -> Branch: main, folder: /docs")
     else:
         print("[ok] GitHub Pages enabled (first deploy can take 1-2 minutes)")
+    # Pin the gist id inside the forwarder page so it works on custom domains too
+    page = BASE / "docs" / "index.html"
+    if page.exists():
+        html = page.read_text()
+        new = re.sub(r'(<meta name="dropzone-gist" content=")[^"]*(")', rf'\g<1>{CONFIG["gist"]}\g<2>', html)
+        if new != html:
+            page.write_text(new)
+            r = subprocess.run(f'git add docs/index.html && git commit -qm "Set permanent link gist" && git push -q',
+                               shell=True, cwd=BASE, capture_output=True, text=True)
+            print("[ok] forwarder page updated and pushed" if r.returncode == 0 else
+                  "[!!] updated docs/index.html - commit and push it yourself:\n" + r.stderr)
     CONFIG["stable_url"] = f"https://{owner.lower()}.github.io/{repo}/"
     save_conf()
     print(f"\nPermanent link: {CONFIG['stable_url']}\nIt always forwards to your current Dropzone while it's running.")

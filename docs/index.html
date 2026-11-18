@@ -3,6 +3,8 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dropzone</title>
 <meta name="theme-color" content="#0f1115">
+<!-- Set by `dropzone --setup-link`. Works on github.io and on custom domains. -->
+<meta name="dropzone-gist" content="a6c9d55f80411ce5fb3ecc3bddf81950">
 <style>
 :root{--bg:#f6f7f9;--card:#fff;--fg:#14161a;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb}
 @media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--fg:#e8eaee;--mut:#8b93a1;--line:#272b33;--acc:#5b8cff}}
@@ -17,16 +19,23 @@ button{margin-top:16px;border:1px solid var(--line);background:var(--card);color
 </style></head><body>
 <div class="card"><h1>Drop<span>zone</span></h1><p id="msg">Connecting…</p><div class="spin" id="spin"></div><button id="retry" hidden>Try again</button></div>
 <script>
-// Finds the owner's current Dropzone address (stored in their public gist "dropzone-link") and forwards there.
-const user=location.hostname.split('.')[0];
+// Finds the owner's current Dropzone address (stored in their gist "dropzone-link") and forwards there.
+const gistId=(document.querySelector('meta[name=dropzone-gist]')||{}).content||'';
+const ghUser=location.hostname.endsWith('.github.io')?location.hostname.split('.')[0]:'';
+async function findGist(){
+  if(gistId)return (await fetch(`https://api.github.com/gists/${gistId}`,{cache:'no-store'})).json();
+  if(!ghUser)return null;
+  const gists=await (await fetch(`https://api.github.com/users/${ghUser}/gists?per_page=100`,{cache:'no-store'})).json();
+  return Array.isArray(gists)?gists.find(x=>x.description==='dropzone-link'):null;
+}
 const msg=t=>document.getElementById('msg').textContent=t;
 let timer;
 async function go(){
   clearTimeout(timer);document.getElementById('spin').hidden=false;document.getElementById('retry').hidden=true;msg('Connecting…');
   try{
-    const gists=await (await fetch(`https://api.github.com/users/${user}/gists?per_page=100`,{cache:'no-store'})).json();
-    const g=Array.isArray(gists)&&gists.find(x=>x.description==='dropzone-link');
-    if(!g)return offline('Dropzone link is not set up yet.');
+    const g=await findGist();
+    if(g&&g.message&&/rate limit/i.test(g.message))return offline('GitHub is busy (rate limit).');
+    if(!g||!g.files||!g.files['dropzone-link.txt'])return offline('Dropzone link is not set up yet.');
     const f=g.files['dropzone-link.txt'];
     const url=(await (await fetch(f.raw_url,{cache:'no-store'})).text()).trim();
     if(!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(url))return offline('Dropzone is offline right now (the PC is off or not sharing).');

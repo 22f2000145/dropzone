@@ -145,7 +145,7 @@ When someone opens the permanent link:
 - **Dropzone running** → they're forwarded to it in a second or two.
 - **PC off / stopped** → a clean "Dropzone is offline" screen that **retries automatically every 15 s**, so they can leave it open.
 
-> GitHub Pages needs a minute or two for its first deploy. After a restart, the gist API can cache for up to ~60 s, so the link may say "offline" briefly before forwarding.
+> Works with custom domains too (the page stores your gist id). GitHub Pages needs a minute or two for its first deploy. After a restart, the gist API can cache for up to ~60 s, so the link may say "offline" briefly before forwarding.
 
 ---
 
